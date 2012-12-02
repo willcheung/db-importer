@@ -5,7 +5,7 @@ Python script that imports any txt file with any delimiter into PostgreSQL datab
 
 This was created (hacked together, rather) for one purpose, to parse multiple delimited files and insert them into PostgreSQL.  In the future, I'd like to add support to XLS files and MySQL.
 
-*Features:*
+**Features:**
 
 * Configuration file to set db connection info
 * Reads any TXT file with any delimiter set in the config file
@@ -15,18 +15,24 @@ This was created (hacked together, rather) for one purpose, to parse multiple de
 * Option to append or delete data
 * Option to convert date data from any format to SQL friendly format
 
-*Usage:*
+**Usage:**
 
 Insert or append data to existing tables:
-    python import.py [path/to/your/files]
+```
+python import.py [path/to/your/files]
+```
 
 Create tables (note: this will drop tables if they exist):
-    python import.py --create_tables [path/to/your/files]
+```
+python import.py --create_tables [path/to/your/files]
+```
 
 Refresh data (delete data from tables and reload)
-    python import.py --delete_data [path/to/your/files]
+```
+python import.py --delete_data [path/to/your/files]
+```
 	
-*Configuration:*
+**Configuration:**
 ```python
 # Filename <=> Table mapping
 # filename_substr : table name
