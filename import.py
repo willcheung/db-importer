@@ -6,8 +6,110 @@ import argparse
 import logging
 import datetime
 import time
+import xlrd
 from import_conf import * # config file
 
+def process_txt_files(f):
+	line_num = 1 # which line number its reading from source file.  starts at 1 including header.
+	row_count = 0 # how many rows are inserted
+	skip_count = 1 # how many rows are skipped. starts at 1 including header.
+	
+	for line in f:
+		vals = []
+		line_num = line_num + 1
+			
+		# line.strip()[:-1] is there to remove an extra '$' (delimiter) at the end of line. 
+		# This is only used if you have one extra delimiter at the end of each line.
+		if remove_last_char:
+			l = line.strip()[:-1]
+		else:
+			l = line.strip()
+				 
+		for col_idx, col in enumerate(l.split(delimiter)): 
+			if "_dt" in str(column_names[col_idx]).lower() and col != '':
+				try:
+					# convert date format to Postgres friendly date
+					t = datetime.datetime.strptime(col, file_date_format) 
+					vals.append(t.strftime("%Y-%m-%d"))
+				except ValueError as e:
+					skip_count = skip_count + 1
+					logging.error("ERROR converting date on line {0} of {1}\nData: {2}\n{3}".format(row_count, filename, line, e))
+					vals = [] # don't insert this line
+					break
+			else:
+				vals.append(col)
+			
+		# sometimes a line is formatted incorrectly
+		# skip row and rollback transaction
+		if vals:
+			try:
+				insert_string = "insert into " + domain + " ("+",".join(column_names) + ")" + " values ("  + ",".join(['%s'] * len(vals)) + ")"
+				cursor.execute(insert_string, vals)
+				conn.commit()
+				row_count=row_count+1
+			except psycopg2.Error as e:
+				conn.rollback()
+				skip_count = skip_count + 1
+				logging.error("ERROR inserting to DB on line {1} of {2}.\nData: {3}\n{0}".format(e.pgerror, row_count, filename, line))
+	
+	return line_num,row_count
+
+def process_xls_files(sheet):
+	line_num = 1 # which line number its reading from source file.  starts at 1 including header.
+	row_count = 0 # how many rows are inserted
+	skip_count = 1 # how many rows are skipped. starts at 1 including header.
+	
+	for row_idx in xrange(1, sheet.nrows):
+		vals = []
+		line_num = line_num + 1
+		
+		for col_idx, col in enumerate(sheet.row(row_idx)):
+			if col_idx not in column_skip:
+				if isinstance(col.value, str) or isinstance(col.value, unicode):
+					if isinstance(col.value, str) and len(col.value.strip()) == 0:
+						vals.append(None)
+					elif isinstance(col.value, unicode) and len((col.value).strip()) == 0:
+						vals.append(None)
+					else:
+						vals.append(col.value[:1023])
+				elif "date" in str(column_names[col_idx]).lower():
+					if (col.value is not None) and int(col.value) > 60:
+						vals.append(str(datetime.datetime(*xlrd.xldate_as_tuple(col.value, sheet.book.datemode))))
+					else:
+						vals.append(None)
+				else:
+					vals.append(col.value)
+					
+		# values = ['%s'] * len(vals)
+		# values = [value.replace('\'TIMESTAMP', 'TIMESTAMP\'') for value in values]
+
+		insert_string = "insert into " + domain + " ("+",".join(column_names) + ")" + " values ("  + ",".join(['%s'] * len(vals)) + ")"
+		#print insert_string
+		row_count=row_count+1
+		cursor.execute(insert_string, vals)
+		conn.commit()
+	
+	return line_num,row_count
+
+def create_tables(domain, column_names):
+	drop_string = "drop table if exists " + domain + ";"
+	logging.info("Dropping table "+domain)
+	print drop_string
+	create_string = "create table " + domain + " (id_ serial,\n " + " varchar(1024),\n".join(column_names) + " varchar(1024));" 
+	logging.info("Creating table "+domain)
+	print create_string
+	cursor.execute(drop_string)
+	cursor.execute(create_string)
+	conn.commit()
+
+def delete_data(domain):
+	delete_string = "delete from " + domain + ";"
+	logging.info("Deleting data from " + domain)
+	print "Deleting data from " + domain
+	cursor.execute(delete_string)
+	conn.commit()
+
+######### Main Starts Here ############
 parser = argparse.ArgumentParser(description='Parse delimited text files and load them into PostgreSQL. The script can optionally create tables based on the files. If table exists, it will append the data.')
 parser = argparse.ArgumentParser()
 parser.add_argument("path", help="path of delimited files. Example: ~/directory_of_files/")
@@ -25,16 +127,28 @@ cursor = conn.cursor()
 logging.info("Connected to server")
 
 path = args.path
+files = None
+file_type = None
+processed_domain = []
 					
 files = filter(lambda x: ".TXT" in x or ".txt" in x, os.listdir(path))
+file_type = "txt"
+if not files:
+	files = filter(lambda x: ".xlsx" in x or ".xls" in x, os.listdir(path))
+	file_type = "xls"
+	if not files:
+		print "No files are found."
+		sys.exit()
+
 print files
 logging.info("Reading %s files: %s" % (str(len(files)),str(files)))
-
-processed_domain = []
 
 for filename in files:
 	column_skip = set() # some columns are 0 len 
 	column_names = [] # cleaned up column names
+	xls_colomn_names = [] # original column names (from excel)
+	lines_read = 0
+	rows_inserted = 0
 
 	domain = None	# see if we have a matching entry and set the domain if so
 	
@@ -43,85 +157,66 @@ for filename in files:
 			domain = value
 			break
 	if domain is None:
-		print "unknown filename: %s" % filename
-		logging.info("unknown filename: %s" % filename)
+		print "File does not match domain: %s" % filename
+		logging.info("File does not match domain: %s" % filename)
 		continue
 	
 	
-	with open(path + '/' + filename) as f:
-	# f = open(path + '/' + filename)
-	# get the columns
-		column_names = f.readline().strip().split(delimiter)
-		print "\nOpening " + filename
-		print column_names
+	# Get columns
+	if file_type == "txt":
+		with open(path + '/' + filename) as f:
+		# get the columns
+			column_names = f.readline().strip().split(delimiter)
+		
+			print "\nGetting columns from " + filename
+			print column_names
+			
+			# Create table from columns
+			if domain not in processed_domain: # first time seeing this domain - create table and adapter node
+				processed_domain.append(domain) # push domain into processed list
+		
+				if args.create_tables:
+					create_tables(domain, column_names)
+			
+				if args.delete_data:
+					delete_data(domain)
+			
+			# now insert the data
+			logging.info("Inserting data into "+domain+" from "+str(filename))
+			lines_read,rows_inserted = process_txt_files(f)
 
+	elif file_type == "xls":
+		sheet = xlrd.open_workbook(path + '/' + filename).sheets()[0]
+		
+		# get the columns
+		for column_index, column in enumerate([col.value for col in sheet.row(0)]):
+			# some of these end up being 0 len
+			if(len(column) == 0):
+				column_skip.add(column_index)
+				continue
+			# elif "comment" in str(column).lower(): # ignore comments
+			# 	column_skip.add(column_index)
+			# 	continue
+			xls_colomn_names.append(str(column))
+			clean_name = filter(lambda c: c.isalpha() or c.isdigit(), column)
+			column_names.append(clean_name)
+		
+		# Create table from columns
 		if domain not in processed_domain: # first time seeing this domain - create table and adapter node
 			processed_domain.append(domain) # push domain into processed list
 		
 			if args.create_tables:
-				drop_string = "drop table if exists " + domain + ";"
-				logging.info("Dropping table "+domain)
-				print drop_string
-				create_string = "create table " + domain + " (id_ serial,\n " + " varchar(1024),\n".join(column_names) + " varchar(1024));" 
-				logging.info("Creating table "+domain)
-				print create_string
-				cursor.execute(drop_string)
-				cursor.execute(create_string)
-				conn.commit()
+				create_tables(domain, column_names)
 			
 			if args.delete_data:
-				delete_string = "delete from " + domain + ";"
-				logging.info("Deleting data from " + domain)
-				print "Deleting data from " + domain
-				cursor.execute(delete_string)
-				conn.commit()
-
+				delete_data(domain)
+		
 		# now insert the data
 		logging.info("Inserting data into "+domain+" from "+str(filename))
-		
-		row_count = 0 # how many rows are inserted
-		line_num = 1 # which line number its reading from source file.  starts at 1 including header.
-		skip_count = 1 # how many rows are skipped. starts at 1 including header.
-		
-		for line in f:
-			vals = []
-			line_num = line_num + 1
-			
-			# line.strip()[:-1] is there to remove an extra '$' (delimiter) at the end of line. 
-			# This is only used if you have one extra delimiter at the end of each line.
-			if remove_last_char:
-				l = line.strip()[:-1]
-			else:
-				l = line.strip()
-				 
-			for col_idx, col in enumerate(l.split(delimiter)): 
-				if "_dt" in str(column_names[col_idx]).lower() and col != '':
-					try:
-						# convert date format to Postgres friendly date
-						t = datetime.datetime.strptime(col, file_date_format) 
-						vals.append(t.strftime("%Y-%m-%d"))
-					except ValueError as e:
-						skip_count = skip_count + 1
-						logging.error("ERROR converting date on line {0} of {1}\nData: {2}\n{3}".format(row_count, filename, line, e))
-						vals = [] # don't insert this line
-						break
-				else:
-					vals.append(col)
-			
-			# sometimes a line is formatted incorrectly
-			# skip row and rollback transaction
-			if vals:
-				try:
-					insert_string = "insert into " + domain + " ("+",".join(column_names) + ")" + " values ("  + ",".join(['%s'] * len(vals)) + ")"
-					cursor.execute(insert_string, vals)
-					conn.commit()
-					row_count=row_count+1
-				except psycopg2.Error as e:
-					conn.rollback()
-					skip_count = skip_count + 1
-					logging.error("ERROR inserting to DB on line {1} of {2}.\nData: {3}\n{0}".format(e.pgerror, row_count, filename, line))
-		
-		logging.info("READ %s rows from %s | INSERTED %s rows into %s | SKIPPED %s including header row" % (line_num, filename, row_count, domain, skip_count))
+		lines_read,rows_inserted = process_xls_files(sheet)
+	
+	logging.info("READ %s rows (incl. header) from %s | INSERTED %s rows into %s" % (lines_read, filename, rows_inserted, domain))
+
 
 logging.info("Finished processing %s files." % str(len(files)))
 logging.info("Success!")
