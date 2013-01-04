@@ -26,7 +26,7 @@ def process_txt_files(f):
 			l = line.strip()
 				 
 		for col_idx, col in enumerate(l.split(delimiter)): 
-			if "_dt" in str(column_names[col_idx]).lower() and col != '':
+			if "_date" in str(column_names[col_idx]).lower() and col != '':
 				try:
 					# convert date format to Postgres friendly date
 					t = datetime.datetime.strptime(col, file_date_format) 
@@ -72,7 +72,7 @@ def process_xls_files(sheet):
 						vals.append(None)
 					else:
 						vals.append(col.value[:1023])
-				elif "date" in str(column_names[col_idx]).lower():
+				elif "date" in str(column_names[col_idx]).lower(): # converts excel-stored float into dates
 					if (col.value is not None) and int(col.value) > 60:
 						vals.append(str(datetime.datetime(*xlrd.xldate_as_tuple(col.value, sheet.book.datemode))))
 					else:
@@ -109,13 +109,43 @@ def delete_data(domain):
 	cursor.execute(delete_string)
 	conn.commit()
 
-######### Main Starts Here ############
+########## Main Starts Here ############
 parser = argparse.ArgumentParser(description='Parse delimited text files and load them into PostgreSQL. The script can optionally create tables based on the files. If table exists, it will append the data.')
-parser = argparse.ArgumentParser()
-parser.add_argument("path", help="path of delimited files. Example: ~/directory_of_files/")
+parser.add_argument("path", help="path of excel or text files. Example: ~/directory_of_files/")
+parser.add_argument("--file", help="only process a SINGLE file from [path] argument and ignore other files. Example: --file filename.xls will process only ~directory_of_files/filename.xls")
 parser.add_argument("--create_tables", help="Drops table if it exists. Creates db table.", action="store_true")
 parser.add_argument("--delete_data", help="Deletes data from table without dropping table.", action="store_true")
 args = parser.parse_args()
+
+path = args.path
+files = None
+file_type = None
+
+if args.file:
+	file = args.file
+	files = filter(lambda x: file == x, os.listdir(path))
+	if not files:
+		print "Can't find %s. Bye bye." % file
+		sys.exit()
+		
+	if ".TXT" in file or ".txt" in file:
+		file_type = "txt"
+	elif ".xlsx" in file or ".xls" in file:
+		file_type = "xls"
+	else: 
+		print "File is not .txt or .xls / .xlsx. Please specify a new file."
+		sys.exit()
+else: # process all files in [path]
+	files = filter(lambda x: ".TXT" in x or ".txt" in x, os.listdir(path))
+	file_type = "txt"
+	if not files:
+		files = filter(lambda x: ".xlsx" in x or ".xls" in x, os.listdir(path))
+		file_type = "xls"
+		if not files:
+			print "No files are found."
+			sys.exit()
+
+print files
 
 log_filename = datetime.datetime.now().strftime('log_%m-%d-%Y_%H:%M:%S.log')
 logging.basicConfig(filename=log_filename, level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -126,22 +156,8 @@ conn = psycopg2.connect(conn_string)
 cursor = conn.cursor()
 logging.info("Connected to server")
 
-path = args.path
-files = None
-file_type = None
-processed_domain = []
-					
-files = filter(lambda x: ".TXT" in x or ".txt" in x, os.listdir(path))
-file_type = "txt"
-if not files:
-	files = filter(lambda x: ".xlsx" in x or ".xls" in x, os.listdir(path))
-	file_type = "xls"
-	if not files:
-		print "No files are found."
-		sys.exit()
-
-print files
 logging.info("Reading %s files: %s" % (str(len(files)),str(files)))
+processed_domain = [] # initialize domain <-> filename mapping
 
 for filename in files:
 	column_skip = set() # some columns are 0 len 
@@ -215,8 +231,7 @@ for filename in files:
 		logging.info("Inserting data into "+domain+" from "+str(filename))
 		lines_read,rows_inserted = process_xls_files(sheet)
 	
-	logging.info("READ %s rows (incl. header) from %s | INSERTED %s rows into %s" % (lines_read, filename, rows_inserted, domain))
+	logging.info("----- READ %s rows (incl. header) from %s | INSERTED %s rows into %s -----" % (lines_read, filename, rows_inserted, domain))
 
 
-logging.info("Finished processing %s files." % str(len(files)))
-logging.info("Success!")
+logging.info("Finished processing %s files. All done!" % str(len(files)))

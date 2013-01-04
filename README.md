@@ -6,7 +6,7 @@ Python script that imports any Excel or text file with any delimiter into Postgr
 **Features:**
 
 * Configuration file to set db connection info
-* Reads any XLS or TXT file with any delimiter set in the config file
+* Reads any XLS or TXT file with any delimiter
 * Reads and parses multiple files into same or different tables
 * Error logging and exception handling that returns skipped rows
 * Option to create tables from filenames
@@ -15,9 +15,14 @@ Python script that imports any Excel or text file with any delimiter into Postgr
 
 **Usage:**
 
-Insert or append data to existing tables:
+Insert or append data from multiple files to existing tables:
 ```
 python import.py [path/to/your/files]
+```
+
+Insert or append data from SINGLE file to an existing table:
+```
+python import.py [path/to/your/files] --file [filename.xls]
 ```
 
 Create tables (note: this will drop tables if they exist):
