@@ -7,9 +7,10 @@ import logging
 import datetime
 import time
 import xlrd
+import csv
 from import_conf import * # config file
 
-def process_txt_files(f):
+def process_txt_files(f, column_names):
 	line_num = 1 # which line number its reading from source file.  starts at 1 including header.
 	row_count = 0 # how many rows are inserted
 	skip_count = 1 # how many rows are skipped. starts at 1 including header.
@@ -25,8 +26,14 @@ def process_txt_files(f):
 		else:
 			l = line.strip()
 				 
-		for col_idx, col in enumerate(l.split(delimiter)): 
-			if "_date" in str(column_names[col_idx]).lower() and col != '':
+		if file_type == "txt":
+			col = l.split(delimiter)
+		elif file_type == "csv":
+			col = csv.reader([l], skipinitialspace=True)
+			col = col.next()
+			
+		for col_idx, col in enumerate(col): 
+			if "-date" in str(column_names[col_idx]).lower() and col != '':
 				try:
 					# convert date format to Postgres friendly date
 					t = datetime.datetime.strptime(col, file_date_format) 
@@ -128,22 +135,27 @@ if args.file:
 		print "Can't find %s. Bye bye." % file
 		sys.exit()
 		
-	if ".TXT" in file or ".txt" in file:
+	if ".txt" in file.lower():
 		file_type = "txt"
+	elif ".csv" in file.lower():
+		file_type = "csv"
 	elif ".xlsx" in file or ".xls" in file:
 		file_type = "xls"
 	else: 
 		print "File is not .txt or .xls / .xlsx. Please specify a new file."
 		sys.exit()
 else: # process all files in [path]
-	files = filter(lambda x: ".TXT" in x or ".txt" in x, os.listdir(path))
+	files = filter(lambda x: ".txt" in x.lower(), os.listdir(path))
 	file_type = "txt"
 	if not files:
-		files = filter(lambda x: ".xlsx" in x or ".xls" in x, os.listdir(path))
-		file_type = "xls"
+		files = filter(lambda x: ".csv" in x, os.listdir(path))
+		file_type = "csv"
 		if not files:
-			print "No files are found."
-			sys.exit()
+			files = filter(lambda x: ".xlsx" in x or ".xls" in x, os.listdir(path))
+			file_type = "xls"
+			if not files:
+				print "No files are found."
+				sys.exit()
 
 print files
 
@@ -179,10 +191,13 @@ for filename in files:
 	
 	
 	# Get columns
-	if file_type == "txt":
+	if file_type == "txt" or file_type == "csv":
 		with open(path + '/' + filename) as f:
 		# get the columns
 			column_names = f.readline().strip().split(delimiter)
+
+			# get rid of unicodes, dashes and spaces in column names
+			column_names = [c.replace('\xef\xbb\xbf', '').replace('-','_').replace(' ','_') for c in column_names]
 		
 			print "\nGetting columns from " + filename
 			print column_names
@@ -199,7 +214,7 @@ for filename in files:
 			
 			# now insert the data
 			logging.info("Inserting data into "+domain+" from "+str(filename))
-			lines_read,rows_inserted = process_txt_files(f)
+			lines_read,rows_inserted = process_txt_files(f, column_names)
 
 	elif file_type == "xls":
 		sheet = xlrd.open_workbook(path + '/' + filename).sheets()[0]
