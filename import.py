@@ -79,7 +79,7 @@ def process_xls_files(sheet):
 						vals.append(None)
 					else:
 						vals.append(col.value[:1023])
-				elif "date" in str(column_names[col_idx]).lower(): # converts excel-stored float into dates
+				elif "date" in str(column_names[col_idx]).lower() or "dtc" in str(column_names[col_idx]).lower(): # converts excel-stored float into dates
 					if (col.value is not None) and int(col.value) > 60:
 						vals.append(str(datetime.datetime(*xlrd.xldate_as_tuple(col.value, sheet.book.datemode))))
 					else:
@@ -229,7 +229,8 @@ for filename in files:
 			# 	column_skip.add(column_index)
 			# 	continue
 			xls_colomn_names.append(str(column))
-			clean_name = filter(lambda c: c.isalpha() or c.isdigit(), column)
+			# clean_name = filter(lambda c: c.isalpha() or c.isdigit(), column)
+			clean_name = [c.replace('-','_').replace(' ','_') for c in column]
 			column_names.append(clean_name)
 		
 		# Create table from columns
