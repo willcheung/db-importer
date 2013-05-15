@@ -174,7 +174,7 @@ processed_domain = [] # initialize domain <-> filename mapping
 for filename in files:
 	column_skip = set() # some columns are 0 len 
 	column_names = [] # cleaned up column names
-	xls_colomn_names = [] # original column names (from excel)
+	xls_column_names = [] # original column names (from excel)
 	lines_read = 0
 	rows_inserted = 0
 
@@ -228,10 +228,11 @@ for filename in files:
 			# elif "comment" in str(column).lower(): # ignore comments
 			# 	column_skip.add(column_index)
 			# 	continue
-			xls_colomn_names.append(str(column))
-			# clean_name = filter(lambda c: c.isalpha() or c.isdigit(), column)
-			clean_name = [c.replace('-','_').replace(' ','_') for c in column]
-			column_names.append(clean_name)
+			xls_column_names.append(str(column))
+			column_names = [c.replace('-','_').replace(' ','_') for c in xls_column_names]
+
+		print "\nGetting columns from " + filename
+		print column_names
 		
 		# Create table from columns
 		if domain not in processed_domain: # first time seeing this domain - create table and adapter node
