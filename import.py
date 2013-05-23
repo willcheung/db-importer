@@ -159,7 +159,7 @@ else: # process all files in [path]
 
 print files
 
-log_filename = datetime.datetime.now().strftime('log_%m-%d-%Y_%H:%M:%S.log')
+log_filename = datetime.datetime.now().strftime('log_%m-%d-%Y.log')
 logging.basicConfig(filename=log_filename, level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
 conn_string = "host='{0}' dbname='{1}' user='{2}' password='{3}'".format(conn_info['host'], conn_info['dbname'], conn_info['user'], conn_info['password']) 
