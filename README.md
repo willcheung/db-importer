@@ -1,5 +1,6 @@
 db-importer
 ===========
+Python script that imports any Excel or text file with any delimiter into PostgreSQL database.
 
 ### Setting up libraries
 * Make sure you have postgresql installed.
@@ -13,8 +14,6 @@ db-importer
 * Download src from https://pypi.python.org/pypi/xlrd/0.9.2
 * Any OS: Unzip the .zip file into a suitable directory, chdir to that directory, then do "sudo python setup.py install".
 
-
-Python script that imports any Excel or text file with any delimiter into PostgreSQL database.
 
 **Features:**
 
