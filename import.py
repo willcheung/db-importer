@@ -1,5 +1,6 @@
 import os
 import os.path
+import re
 import sys
 import psycopg2
 import argparse
@@ -193,7 +194,7 @@ for filename in files:
 			column_names = f.readline().strip().split(delimiter)
 
 			# get rid of unicodes, dashes and spaces in column names
-			column_names = [c.replace('\xef\xbb\xbf', '').replace('-','_').replace(' ','_') for c in column_names]
+			column_names = [re.sub(r'[\W]+','',c.replace('\xef\xbb\xbf', '').replace('-','_').replace(' ','_')) for c in column_names]
 		
 			print "\nGetting columns from " + filename
 			print column_names
@@ -225,7 +226,7 @@ for filename in files:
 			# 	column_skip.add(column_index)
 			# 	continue
 			xls_column_names.append(str(column))
-			column_names = [c.replace('-','_').replace(' ','_') for c in xls_column_names]
+			column_names = [re.sub(r'[\W]+','',c.replace('-','_').replace(' ','_')) for c in xls_column_names]
 
 		print "\nGetting columns from " + filename
 		print column_names
