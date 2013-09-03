@@ -1,6 +1,19 @@
 db-importer
 ===========
 
+### Setting up libraries
+* Make sure you have postgresql installed.
+* Xcode installed
+
+#### Install psychopg2 (for talking to postgres)
+* Download src from http://initd.org/psycopg/download/
+* Follow instructions.  If you get 'unable to execute clang...' error, follow http://jaranto.blogspot.com/2012/08/os-x-unable-to-execute-clang-no-such.html
+
+#### Install xlrd (for talking to excel)
+* Download src from https://pypi.python.org/pypi/xlrd/0.9.2
+* Any OS: Unzip the .zip file into a suitable directory, chdir to that directory, then do "sudo python setup.py install".
+
+
 Python script that imports any Excel or text file with any delimiter into PostgreSQL database.
 
 **Features:**
