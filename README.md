@@ -26,6 +26,7 @@ Python script that imports any Excel or text file with any delimiter into Postgr
 * Option to convert date data from any format to SQL friendly format
 
 **Usage:**
+*Note:* Place all the xls or csv files in a single directory. db-importer will read all the files in that directory by default, unless you specify a single filename.
 
 Insert or append data from multiple files to existing tables:
 ```
@@ -49,14 +50,6 @@ python import.py --delete_data [path/to/your/files]
 	
 **Configuration:**
 ```python
-# Filename <=> Table mapping
-# filename_substr : table name
-table_names = {	
-				'filename1' : 'TABLE1',
-				'filename2' : 'TABLE2',
-				'filename3' : 'TABLE3'
-}
-
 conn_info = {
 				'host' : 'localhost',
 				'dbname' : 'mydb',
