@@ -25,7 +25,7 @@ Python script that imports any Excel or text file with any delimiter into Postgr
 * Option to append or delete data
 * Option to convert date data from any format to SQL friendly format
 
-**Usage:**
+### Usage:
 *Note:* Place all the xls or csv files in a single directory. db-importer will read all the files in that directory by default, unless you specify a single filename.
 
 Insert or append data from multiple files to existing tables:
