@@ -178,12 +178,8 @@ for filename in files:
 	lines_read = 0
 	rows_inserted = 0
 
-	domain = None	# see if we have a matching entry and set the domain if so
+	domain = os.path.splitext(filename)[0].replace(' ','').lower() # create table based on filename
 	
-	for key, value in table_names.items():
-		if key in filename.lower():
-			domain = value
-			break
 	if domain is None:
 		print "File does not match domain: %s" % filename
 		logging.info("File does not match domain: %s" % filename)
