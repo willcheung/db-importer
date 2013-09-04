@@ -28,7 +28,7 @@ def process_txt_files(f, column_names):
 			l = line.strip()
 				 
 		if file_type == "txt":
-			col = l.split(delimiter)
+			col = l.split(txt_delimiter)
 		elif file_type == "csv":
 			col = csv.reader([l], skipinitialspace=True)
 			col = col.next()
@@ -189,9 +189,12 @@ for filename in files:
 	
 	# Get columns
 	if file_type == "txt" or file_type == "csv":
-		with open(path + '/' + filename) as f:
-		# get the columns
-			column_names = f.readline().strip().split(delimiter)
+		with open(path + '/' + filename, 'rU') as f:
+			# get the columns by reading first line
+			if file_type == "csv":
+				column_names = f.readline().strip().split(',')
+			else:
+				column_names = f.readline().strip().split(txt_delimiter)
 
 			# get rid of unicodes, dashes and spaces in column names
 			column_names = [re.sub(r'[\W]+','',c.replace('\xef\xbb\xbf', '').replace('-','_').replace(' ','_')) for c in column_names]
